@@ -16,20 +16,41 @@ const enemyBase  = { x: 50, y: 410, width: 70, height: 120, hp: 500 };
 const playerBase = { x: 680, y: 410, width: 70, height: 120, hp: 500 };
 
 // Handle Spawning Friendly Blobs
-function spawnBlob() {
-    const cost = 50;
-    if (money >= cost) {
-        money -= cost;
-        friendlyBlobs.push({
-            x: playerBase.x,
-            y: 505,
-            radius: 18,
-            speed: 1.5,
-            hp: 100,
-            damage: 25,
-            color: "#00FF66", // Vibrant Neon Green
-            state: "walking" 
-        });
+function spawnBlob(type) {
+    if (type === "basic") {
+        const cost = 50;
+        if (money >= cost) {
+            money -= cost;
+            friendlyBlobs.push({
+                type: "basic",
+                x: playerBase.x,
+                y: 480,
+                width: 50,
+                height: 50,
+                speed: 1.5,
+                hp: 100,
+                damage: 25,
+                state: "walking",
+                animTimer: 0
+            });
+        }
+    } else if (type === "tank") {
+        const cost = 150;
+        if (money >= cost) {
+            money -= cost;
+            friendlyBlobs.push({
+                type: "tank",
+                x: playerBase.x,
+                y: 440, 
+                width: 90,
+                height: 90,
+                speed: 0.5,
+                hp: 400,
+                damage: 10,
+                state: "walking",
+                animTimer: 0
+            });
+        }
     }
 }
 
@@ -37,25 +58,158 @@ function spawnBlob() {
 function spawnEnemy() {
     enemyCubes.push({
         x: enemyBase.x + enemyBase.width,
-        y: 490,
-        size: 35,
+        y: 480,
+        width: 50,
+        height: 50,
         speed: 1.0,
         hp: 120,
         damage: 20,
-        color: "#FF0066", // Hot Magenta Pink
-        state: "walking"
+        state: "walking",
+        animTimer: 0
     });
 }
 
-// Create the Spawn Button
-const spawnBtn = document.createElement("button");
-spawnBtn.innerText = "Spawn Basic Blob ($50)";
-spawnBtn.style.position = "absolute";
-spawnBtn.style.top = "20px";
-spawnBtn.style.left = "20px";
-spawnBtn.style.padding = "10px";
-spawnBtn.onclick = spawnBlob;
-document.body.appendChild(spawnBtn);
+// Create Container for Buttons
+const buttonContainer = document.createElement("div");
+buttonContainer.style.position = "absolute";
+buttonContainer.style.top = "20px";
+buttonContainer.style.left = "20px";
+buttonContainer.style.display = "flex";
+buttonContainer.style.gap = "10px";
+document.body.appendChild(buttonContainer);
+
+// Button 1: Basic Blob
+const basicBtn = document.createElement("button");
+basicBtn.innerText = "Spawn Basic Blob ($50)";
+basicBtn.style.padding = "10px";
+basicBtn.onclick = () => spawnBlob("basic");
+buttonContainer.appendChild(basicBtn);
+
+// Button 2: Tank Blob
+const tankBtn = document.createElement("button");
+tankBtn.innerText = "Spawn Tank Blob ($150)";
+tankBtn.style.padding = "10px";
+tankBtn.onclick = () => spawnBlob("tank");
+buttonContainer.appendChild(tankBtn);
+
+
+// VIBRANT CARTOON VECTOR ART DRAWERS
+function drawBasicBlob(x, y, w, h, frame) {
+    ctx.save();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#000000";
+    ctx.fillStyle = "#00FF66"; // Neon Green
+    
+    // Smooth bobbing walk animation simulation
+    let bob = Math.sin(frame * 0.2) * 3;
+
+    // Draw Main Body
+    ctx.beginPath();
+    ctx.arc(x + w/2, y + h/2 + bob, w/2 - 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glossy Highlight
+    ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.beginPath();
+    ctx.arc(x + w/2 - 8, y + h/2 - 8 + bob, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cartoon Eyes
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.arc(x + w/2 - 8, y + h/2 - 3 + bob, 7, 0, Math.PI * 2);
+    ctx.arc(x + w/2 + 8, y + h/2 - 3 + bob, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Pupils looking left
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.arc(x + w/2 - 11, y + h/2 - 3 + bob, 3, 0, Math.PI * 2);
+    ctx.arc(x + w/2 + 5, y + h/2 - 3 + bob, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Happy Smile
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x + w/2 - 2, y + h/2 + 6 + bob, 5, 0, Math.PI);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawTankBlob(x, y, w, h, frame) {
+    ctx.save();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#000000";
+    ctx.fillStyle = "#00BCFF"; // Shield Blue
+    
+    let bob = Math.sin(frame * 0.1) * 2;
+
+    // Chunky Heavy Teardrop Body Shape
+    ctx.beginPath();
+    ctx.moveTo(x + 10, y + h - 5 + bob);
+    ctx.quadraticCurveTo(x + 5, y + 10 + bob, x + w/2, y + 5 + bob);
+    ctx.quadraticCurveTo(x + w - 5, y + 10 + bob, x + w - 10, y + h - 5 + bob);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Serious Eyes
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.arc(x + w/2 - 14, y + h/2 - 8 + bob, 10, 0, Math.PI * 2);
+    ctx.arc(x + w/2 + 14, y + h/2 - 8 + bob, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Pupils
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.arc(x + w/2 - 17, y + h/2 - 8 + bob, 4, 0, Math.PI * 2);
+    ctx.arc(x + w/2 + 11, y + h/2 - 8 + bob, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Slanted Angry Eyebrows
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x + w/2 - 26, y + h/2 - 20 + bob);
+    ctx.lineTo(x + w/2 - 4, y + h/2 - 14 + bob);
+    ctx.moveTo(x + w/2 + 26, y + h/2 - 20 + bob);
+    ctx.lineTo(x + w/2 + 4, y + h/2 - 14 + bob);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawEnemyCube(x, y, w, h, frame) {
+    ctx.save();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#000000";
+    ctx.fillStyle = "#FF0066"; // Hot Magenta Pink
+    
+    // Aggressive side-to-side shuffle simulation
+    let shift = Math.sin(frame * 0.2) * 2;
+
+    ctx.fillRect(x, y + shift, w, h);
+    ctx.strokeRect(x, y + shift, w, h);
+
+    // Angry Diagonal Eyes
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x + 10, y + 14 + shift);
+    ctx.lineTo(x + 22, y + 24 + shift);
+    ctx.moveTo(x + w - 10, y + 14 + shift);
+    ctx.lineTo(x + w - 22, y + 24 + shift);
+    ctx.stroke();
+
+    // Scowl Mouth
+    ctx.beginPath();
+    ctx.moveTo(x + w/2 - 10, y + h - 14 + shift);
+    ctx.quadraticCurveTo(x + w/2, y + h - 20 + shift, x + w/2 + 10, y + h - 14 + shift);
+    ctx.stroke();
+    ctx.restore();
+}
+
 
 // Main Game Loop
 function gameLoop(timestamp) {
@@ -75,21 +229,21 @@ function gameLoop(timestamp) {
 
     for (let blob of friendlyBlobs) {
         for (let cube of enemyCubes) {
-            if (blob.x - blob.radius <= cube.x + cube.size && blob.x + blob.radius >= cube.x) {
+            if (blob.x <= cube.x + cube.width && blob.x + blob.width >= cube.x) {
                 blob.state = "fighting";
                 cube.state = "fighting";
                 cube.hp -= blob.damage * 0.02;
                 blob.hp -= cube.damage * 0.02;
             }
         }
-        if (blob.x - blob.radius <= enemyBase.x + enemyBase.width) {
+        if (blob.x <= enemyBase.x + enemyBase.width) {
             blob.state = "fighting";
             enemyBase.hp -= blob.damage * 0.02;
         }
     }
 
     for (let cube of enemyCubes) {
-        if (cube.x + cube.size >= playerBase.x) {
+        if (cube.x + cube.width >= playerBase.x) {
             cube.state = "fighting";
             playerBase.hp -= cube.damage * 0.02;
         }
@@ -98,16 +252,12 @@ function gameLoop(timestamp) {
     friendlyBlobs = friendlyBlobs.filter(blob => blob.hp > 0);
     enemyCubes = enemyCubes.filter(cube => cube.hp > 0);
 
-    // ----------------------------------------------------------------
-    // RENDER / DRAWING SECTION (Where the art happens!)
-    // ----------------------------------------------------------------
-    
-    // 1. BACKGROUND (A nice retro dark purple sky instead of plain black)
-    ctx.fillStyle = "#1a102f";
+    // RENDERING
+    ctx.fillStyle = "#1a102f"; // Dark Retro Sky
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. GROUND (Pastel Yellow/Green road with a thick cartoon border)
-    ctx.fillStyle = "#3cd070"; // Vibrant pastel green
+    // Ground Road
+    ctx.fillStyle = "#3cd070"; 
     ctx.fillRect(0, 530, canvas.width, 70);
     ctx.strokeStyle = "#000000";
     ctx.lineWidth = 6;
@@ -116,96 +266,47 @@ function gameLoop(timestamp) {
     ctx.lineTo(canvas.width, 530);
     ctx.stroke();
 
-    // 3. DRAW BASES (With thick cartoon outlines)
+    // Cartoon Bases
     ctx.lineWidth = 5;
-    
-    // Enemy Base (Left - Cyberpunk Orange)
     ctx.fillStyle = "#FF6600";
     ctx.fillRect(enemyBase.x, enemyBase.y, enemyBase.width, enemyBase.height);
     ctx.strokeRect(enemyBase.x, enemyBase.y, enemyBase.width, enemyBase.height);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px sans-serif";
-    ctx.fillText(`HP: ${Math.max(0, Math.floor(enemyBase.hp))}`, enemyBase.x, enemyBase.y - 15);
-
-    // Player Base (Right - Neon Cyan Blue)
+    
     ctx.fillStyle = "#00FFFF";
     ctx.fillRect(playerBase.x, playerBase.y, playerBase.width, playerBase.height);
     ctx.strokeRect(playerBase.x, playerBase.y, playerBase.width, playerBase.height);
-    ctx.fillStyle = "#fff";
-    ctx.fillText(`HP: ${Math.max(0, Math.floor(playerBase.hp))}`, playerBase.x, playerBase.y - 15);
 
-    // 4. DRAW CARTOON FRIENDLY BLOBS
+    // UPDATE & RENDER FRIENDLY UNITS
     friendlyBlobs.forEach((blob) => {
+        blob.animTimer++;
         if (blob.state === "walking") {
             blob.x -= blob.speed; 
         }
-        
-        ctx.lineWidth = 4;
-        
-        // Body
-        ctx.beginPath();
-        ctx.arc(blob.x, blob.y, blob.radius, 0, Math.PI * 2);
-        ctx.fillStyle = blob.color;
-        ctx.fill();
-        ctx.strokeStyle = "#000";
-        ctx.stroke();
-        ctx.closePath();
-
-        // Goofy Cartoon Eyes (Left Eye, Right Eye)
-        ctx.fillStyle = "#000";
-        ctx.beginPath();
-        ctx.arc(blob.x - 5, blob.y - 2, 3, 0, Math.PI * 2); // Left eye
-        ctx.arc(blob.x + 3, blob.y - 2, 3, 0, Math.PI * 2); // Right eye
-        ctx.fill();
-        ctx.closePath();
+        if (blob.type === "basic") {
+            drawBasicBlob(blob.x, blob.y, blob.width, blob.height, blob.animTimer);
+        } else {
+            drawTankBlob(blob.x, blob.y, blob.width, blob.height, blob.animTimer);
+        }
     });
 
-    // 5. DRAW CARTOON ENEMY CUBES
+    // UPDATE & RENDER ENEMY UNITS
     enemyCubes.forEach((cube) => {
+        cube.animTimer++;
         if (cube.state === "walking") {
             cube.x += cube.speed; 
         }
-        
-        ctx.lineWidth = 4;
-        
-        // Body
-        ctx.fillStyle = cube.color;
-        ctx.fillRect(cube.x, cube.y, cube.size, cube.size);
-        ctx.strokeRect(cube.x, cube.y, cube.size, cube.size);
-
-        // Angry Cartoon Eyes (\ / style lines)
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 3;
-        
-        // Left angry eyebrow/eye
-        ctx.beginPath();
-        ctx.moveTo(cube.x + 6, cube.y + 8);
-        ctx.lineTo(cube.x + 14, cube.y + 14);
-        ctx.stroke();
-
-        // Right angry eyebrow/eye
-        ctx.beginPath();
-        ctx.moveTo(cube.x + 28, cube.y + 8);
-        ctx.lineTo(cube.x + 20, cube.y + 14);
-        ctx.stroke();
+        drawEnemyCube(cube.x, cube.y, cube.width, cube.height, cube.animTimer);
     });
 
-    // 6. DRAW UI
+    // UI Display
     ctx.fillStyle = "#fff";
     ctx.font = "bold 22px sans-serif";
     ctx.fillText(`Wallet: $${money}`, 20, 80);
 
-    // Win/Loss
-    if (playerBase.hp <= 0) {
-        ctx.fillStyle = "#FF0033";
-        ctx.font = "bold 40px sans-serif";
-        ctx.fillText("GAME OVER 😢", 250, 300);
-        return;
-    }
-    if (enemyBase.hp <= 0) {
+    if (playerBase.hp <= 0 || enemyBase.hp <= 0) {
         ctx.fillStyle = "#FFCC00";
         ctx.font = "bold 40px sans-serif";
-        ctx.fillText("VICTORY! 🎉", 280, 300);
+        ctx.fillText("MATCH OVER", 280, 300);
         return;
     }
 
