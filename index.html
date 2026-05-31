@@ -1,30 +1,142 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Vibe Game</title>
-    <style>
-        body {
-            margin: 0;
-            background-color: #222;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: white;
-            font-family: sans-serif;
-        }
-        canvas {
-            background-color: #111;
-            border: 2px solid #fff;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Battle Blobs</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+    }
+
+    canvas {
+      display: block;
+      border: 2px solid #333;
+      border-bottom: none;
+    }
+
+    /* ── Bottom UI panel ── */
+    #ui {
+      width: 800px;
+      background: #0d0d1a;
+      border: 2px solid #333;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    #money-display {
+      font-size: 20px;
+      color: #ffd700;
+      font-weight: bold;
+      min-width: 80px;
+    }
+
+    /* HP bars */
+    .hp-section {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+    }
+    .hp-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .hp-label { width: 78px; color: #aaa; }
+    .hp-track {
+      flex: 1;
+      height: 10px;
+      background: #2a2a2a;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .hp-fill { height: 100%; border-radius: 5px; transition: width 0.1s; }
+    #p-hp-fill { background: #5af; width: 100%; }
+    #e-hp-fill { background: #f55; width: 100%; }
+    .hp-val { width: 40px; text-align: right; color: #888; font-size: 11px; }
+
+    /* Spawn button */
+    .blob-btn {
+      position: relative;
+      width: 74px;
+      height: 74px;
+      background: #1a1a30;
+      border: 2px solid #444;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      overflow: hidden;
+      user-select: none;
+      transition: border-color 0.1s, transform 0.05s;
+    }
+    .blob-btn:active { transform: scale(0.94); }
+    .blob-btn.can-afford  { border-color: #5d5; }
+    .blob-btn.cant-afford { border-color: #c33; }
+    .blob-btn.on-cooldown { border-color: #666; }
+
+    .btn-name { font-size: 9px; color: #bbb; text-align: center; line-height: 1.2; }
+    .btn-cost { font-size: 13px; color: #ffd700; font-weight: bold; }
+    .btn-key  { font-size: 9px; color: #555; }
+
+    .cd-overlay {
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 100%;
+      height: 0%;
+      background: rgba(0,0,0,0.55);
+      pointer-events: none;
+    }
+
+    .hint { font-size: 11px; color: #444; margin-left: auto; line-height: 1.6; }
+  </style>
 </head>
 <body>
 
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+<canvas id="gameCanvas" width="800" height="380"></canvas>
 
-    <script src="game.js"></script>
+<div id="ui">
+  <div id="money-display">💰 <span id="money">150</span></div>
+
+  <div class="hp-section">
+    <div class="hp-row">
+      <span class="hp-label">Your Base</span>
+      <div class="hp-track"><div class="hp-fill" id="p-hp-fill"></div></div>
+      <span class="hp-val" id="p-hp">5000</span>
+    </div>
+    <div class="hp-row">
+      <span class="hp-label">Enemy Base</span>
+      <div class="hp-track"><div class="hp-fill" id="e-hp-fill"></div></div>
+      <span class="hp-val" id="e-hp">1500</span>
+    </div>
+  </div>
+
+  <div class="blob-btn cant-afford" id="btn-basic" onclick="trySpawnBlob()">
+    <div class="btn-name">Basic<br>Blob</div>
+    <div class="btn-cost">💰50</div>
+    <div class="btn-key">[Space]</div>
+    <div class="cd-overlay" id="cd-basic"></div>
+  </div>
+
+  <div class="hint">Destroy the enemy base!<br>Press R to retry</div>
+</div>
+
+<script src="game.js"></script>
 </body>
 </html>

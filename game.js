@@ -1,228 +1,546 @@
-// ==========================================
-// 1. ASSET CONFIGURATION
-// ==========================================
-const blobSprites = {
-    idle: new Image(),
-    walk1: new Image(),
-    walk2: new Image(),
-    walk3: new Image(),
-    walk4: new Image(),
-    attack: new Image(),
-    knockback: new Image(),
-    death: new Image()
+// =============================================================
+//  THE BATTLE BLOBS — game.js
+//  Level 1: Goopton Plains  (blobs vs cubes)
+// =============================================================
+
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const W = canvas.width;   // 800
+const H = canvas.height;  // 380
+
+// ── Layout ────────────────────────────────────────────────────
+const GROUND_Y   = 290;   // y where units stand
+const P_BASE_X   = 40;    // player base centre x
+const E_BASE_X   = 760;   // enemy  base centre x
+const P_BASE_MAX = 5000;
+const E_BASE_MAX = 1500;
+
+// ── Blob stats ────────────────────────────────────────────────
+const BASIC_BLOB = {
+  hp: 250, damage: 20,
+  attackRate: 90,   // frames between attacks
+  speed: 2,
+  range: 72,        // px from front edge to target front edge
+  cost: 50,
+  spawnCooldown: 60,
+  w: 64, h: 64,
 };
 
-// Maps exactly to the filenames in your folder
-blobSprites.idle.src      = 'img/blob/basic-blob-idle.png';
-blobSprites.walk1.src     = 'img/blob/basic-blob-walk1.png';
-blobSprites.walk2.src     = 'img/blob/basic-blob-walk2.png';
-blobSprites.walk3.src     = 'img/blob/basic-blob-walk3.png';
-blobSprites.walk4.src     = 'img/blob/basic-blob-walk4.png';
-blobSprites.attack.src    = 'img/blob/basic-bob-attack.png'; // Matched your typo "bob" here!
-blobSprites.knockback.src = 'img/blob/basic-blob-knockback.png';
-blobSprites.death.src     = 'img/blob/basic-blob-dead.png';
+// ── Cube stats ────────────────────────────────────────────────
+const CUBE_DEF = {
+  hp: 140, damage: 14,
+  attackRate: 100,
+  speed: 1.2,
+  range: 64,
+  reward: 25,
+  size: 50,
+};
 
-// Placeholder for your Pink Cube Enemy
-const enemySprites = { idle: new Image() }; 
-enemySprites.idle.src = 'img/enemy/pink_cube.png';
+// ── Sprite loading ────────────────────────────────────────────
+const spr = {};
+const SPRITE_SRCS = {
+  idle:      'img/blob/basic-blob-idle.png',
+  walk1:     'img/blob/basic-blob-walk1.png',
+  walk2:     'img/blob/basic-blob-walk2.png',
+  walk3:     'img/blob/basic-blob-walk3.png',
+  walk4:     'img/blob/basic-blob-walk4.png',
+  attack:    'img/blob/basic-bob-attack.png',
+  knockback: 'img/blob/basic-blob-knockback.png',
+  dead:      'img/blob/basic-blob-dead.png',
+};
+for (const [k, src] of Object.entries(SPRITE_SRCS)) {
+  const img = new Image();
+  img.src = src;
+  spr[k] = img;
+}
 
-// ==========================================
-// 2. HERO BLOB CLASS
-// ==========================================
+// ── Game state ────────────────────────────────────────────────
+let money, playerHp, enemyHp;
+let blobs, cubes;
+let frame, moneyTimer, enemySpawnTimer;
+let blobCooldown;
+let gameOver, result;   // result: 'WIN' | 'LOSE'
+
+function initGame() {
+  money          = 150;
+  playerHp       = P_BASE_MAX;
+  enemyHp        = E_BASE_MAX;
+  blobs          = [];
+  cubes          = [];
+  frame          = 0;
+  moneyTimer     = 0;
+  enemySpawnTimer= 0;
+  blobCooldown   = 0;
+  gameOver       = false;
+  result         = null;
+  refreshHUD();
+}
+
+// =============================================================
+//  BasicBlob  (player unit — moves RIGHT)
+// =============================================================
 class BasicBlob {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 64;   
-        this.height = 64;
-        
-        // Stats
-        this.hp = 100;
-        this.maxHp = 100;
-        this.damage = 25;
-        this.speed = 2;
-        this.attackRange = 40; 
-        
-        // State Machine
-        this.state = 'WALKING'; // 'IDLE', 'WALKING', 'ATTACKING', 'KNOCKBACK', 'DEAD'
-        this.stateTimer = 0;
-        
-        // Animation
-        this.walkFrames = [blobSprites.walk1, blobSprites.walk2, blobSprites.walk3, blobSprites.walk4];
-        this.currentFrameIndex = 0;
-        this.animationTimer = 0;
-        this.animationSpeed = 8; 
-        
-        // Death Fade Effect
-        this.opacity = 1.0;
+  constructor() {
+    const d = BASIC_BLOB;
+    this.x  = P_BASE_X + 28;
+    this.y  = GROUND_Y - d.h;
+    this.w  = d.w;
+    this.h  = d.h;
+    this.hp = d.hp;
+    this.maxHp = d.hp;
+    this.state  = 'WALK';  // WALK | ATTACK | KNOCKBACK | DEAD
+    this.atkTimer   = 0;
+    this.animFrame  = 0;
+    this.animTimer  = 0;
+    this.knockTimer = 0;
+    this.deadTimer  = 0;
+    this.opacity    = 1;
+  }
+
+  // rightmost edge — the "front" for a right-moving unit
+  get front() { return this.x + this.w; }
+
+  takeDamage(dmg) {
+    if (this.state === 'DEAD') return;
+    this.hp -= dmg;
+    if (this.hp <= 0) { this.hp = 0; this.state = 'DEAD'; return; }
+    if (dmg >= this.maxHp * 0.25) {
+      this.state = 'KNOCKBACK';
+      this.knockTimer = 18;
+    }
+  }
+
+  // Returns the nearest cube (or the string 'base') within attack range, else null.
+  findTarget() {
+    let best = null, bestGap = Infinity;
+    for (const c of cubes) {
+      if (c.state === 'DEAD') continue;
+      const gap = c.x - this.front;          // gap between my right and cube's left
+      if (gap <= BASIC_BLOB.range && gap > -c.size) {
+        if (gap < bestGap) { best = c; bestGap = gap; }
+      }
+    }
+    if (!best && (E_BASE_X - 22) - this.front <= BASIC_BLOB.range) best = 'base';
+    return best;
+  }
+
+  // True if a friendly blob is directly in front, blocking movement.
+  isBlocked() {
+    for (const b of blobs) {
+      if (b === this || b.state === 'DEAD') continue;
+      if (b.x > this.x && b.x - this.front < 2) return true;
+    }
+    return false;
+  }
+
+  update() {
+    if (this.state === 'DEAD') {
+      this.deadTimer++;
+      this.opacity = Math.max(0, 1 - this.deadTimer / 40);
+      return;
     }
 
-    update(enemies) {
-        this.animationTimer++;
-
-        switch (this.state) {
-            case 'IDLE':
-                // Stand still, wait for instructions or enemies
-                break;
-
-            case 'WALKING':
-                this.x += this.speed;
-
-                // Animate legs
-                if (this.animationTimer >= this.animationSpeed) {
-                    this.currentFrameIndex = (this.currentFrameIndex + 1) % this.walkFrames.length;
-                    this.animationTimer = 0;
-                }
-
-                // SCAN FOR ENEMIES
-                let closestEnemy = this.getClosestEnemy(enemies);
-                if (closestEnemy && (closestEnemy.x - (this.x + this.width)) <= this.attackRange) {
-                    this.state = 'ATTACKING';
-                    this.stateTimer = 30; 
-                    this.animationTimer = 0;
-                }
-                break;
-
-            case 'ATTACKING':
-                this.stateTimer--;
-                
-                // Lunge violently forward halfway through the attack animation
-                if (this.stateTimer === 15) {
-                    this.x += 25; 
-                    let target = this.getClosestEnemy(enemies);
-                    if (target) {
-                        target.takeDamage(this.damage);
-                    }
-                }
-
-                if (this.stateTimer <= 0) {
-                    this.state = 'WALKING';
-                }
-                break;
-
-            case 'KNOCKBACK':
-                this.stateTimer--;
-                this.x -= 3; 
-
-                if (this.stateTimer <= 0) {
-                    this.state = 'WALKING';
-                }
-                break;
-
-            case 'DEAD':
-                // Fade the puddle out
-                if (this.opacity > 0) {
-                    this.opacity -= 0.016; 
-                }
-                break;
-        }
+    if (this.state === 'KNOCKBACK') {
+      this.knockTimer--;
+      this.x -= 2;
+      if (this.knockTimer <= 0) this.state = 'WALK';
+      return;
     }
 
-    takeDamage(amount) {
-        if (this.state === 'DEAD') return;
+    const target = this.findTarget();
 
-        this.hp -= amount;
-
-        // Check for Death -> Goo Puddle
-        if (this.hp <= 0) {
-            this.hp = 0;
-            this.state = 'DEAD';
-            return;
-        }
-
-        // Knockback triggers at health milestones
-        if (amount >= this.maxHp * 0.3) { 
-            this.state = 'KNOCKBACK';
-            this.stateTimer = 20; 
-        }
-    }
-
-    getClosestEnemy(enemies) {
-        return enemies.filter(e => e.x > this.x && e.state !== 'DEAD')[0] || null;
-    }
-
-    draw(ctx) {
-        let sprite;
-
-        // Pick frame based on exact state
-        if (this.state === 'IDLE') sprite = blobSprites.idle;
-        else if (this.state === 'WALKING') sprite = this.walkFrames[this.currentFrameIndex];
-        else if (this.state === 'ATTACKING') sprite = blobSprites.attack;
-        else if (this.state === 'KNOCKBACK') sprite = blobSprites.knockback;
-        else if (this.state === 'DEAD') sprite = blobSprites.death;
-
-        // Apply global alpha for death fading
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, this.opacity);
-        // Fallback in case image hasn't loaded yet
-        if (sprite.complete && sprite.naturalWidth !== 0) {
-            ctx.drawImage(sprite, this.x, this.y, this.width, this.height);
-        }
-        ctx.restore();
-    }
-}
-
-// ==========================================
-// 3. ENEMY CUBE CLASS (Target Dummy)
-// ==========================================
-class PinkCubeEnemy {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 64;
-        this.height = 64;
-        this.hp = 100;
-        this.state = 'ALIVE';
-    }
-    update() {
-        if (this.state !== 'DEAD') this.x -= 0.5; 
-    }
-    takeDamage(amount) {
-        this.hp -= amount;
-        if (this.hp <= 0) this.state = 'DEAD';
-    }
-    draw(ctx) {
-        if (this.state === 'DEAD') return;
-        // Fallback rectangle if enemy sprite is missing
-        if (enemySprites.idle.complete && enemySprites.idle.naturalWidth !== 0) {
-             ctx.drawImage(enemySprites.idle, this.x, this.y, this.width, this.height);
+    if (target) {
+      this.state = 'ATTACK';
+      this.atkTimer++;
+      if (this.atkTimer >= BASIC_BLOB.attackRate) {
+        this.atkTimer = 0;
+        if (target === 'base') {
+          enemyHp = Math.max(0, enemyHp - BASIC_BLOB.damage);
+          refreshHUD();
         } else {
-             ctx.fillStyle = 'pink';
-             ctx.fillRect(this.x, this.y, this.width, this.height);
+          target.takeDamage(BASIC_BLOB.damage);
         }
+      }
+    } else {
+      this.state = 'WALK';
+      if (!this.isBlocked()) this.x += BASIC_BLOB.speed;
+      this.animTimer++;
+      if (this.animTimer >= 8) {
+        this.animTimer = 0;
+        this.animFrame = (this.animFrame + 1) % 4;
+      }
     }
+  }
+
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+
+    const WALK = [spr.walk1, spr.walk2, spr.walk3, spr.walk4];
+    let img;
+    if      (this.state === 'DEAD')      img = spr.dead;
+    else if (this.state === 'KNOCKBACK') img = spr.knockback;
+    else if (this.state === 'ATTACK')    img = spr.attack;
+    else                                 img = WALK[this.animFrame];
+
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, this.x, this.y, this.w, this.h);
+    } else {
+      // Fallback circle while sprites load
+      ctx.fillStyle = '#6af';
+      ctx.beginPath();
+      ctx.ellipse(this.x + this.w / 2, this.y + this.h / 2,
+                  this.w / 2, this.h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // HP bar
+    if (this.state !== 'DEAD') {
+      const bx = this.x, by = this.y - 7;
+      ctx.fillStyle = '#222';
+      ctx.fillRect(bx, by, this.w, 4);
+      ctx.fillStyle = '#5af';
+      ctx.fillRect(bx, by, this.w * (this.hp / this.maxHp), 4);
+    }
+
+    ctx.restore();
+  }
 }
 
-// ==========================================
-// 4. MAIN GAME LOOP
-// ==========================================
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+// =============================================================
+//  Cube  (enemy unit — moves LEFT)
+// =============================================================
+class Cube {
+  constructor() {
+    const s = CUBE_DEF.size;
+    this.size   = s;
+    this.w      = s;
+    this.h      = s;
+    this.x      = E_BASE_X - 28 - s;  // spawn just left of enemy base
+    this.y      = GROUND_Y - s;
+    this.hp     = CUBE_DEF.hp;
+    this.maxHp  = CUBE_DEF.hp;
+    this.state  = 'WALK';
+    this.atkTimer = 0;
+    this.deadTimer = 0;
+    this.opacity   = 1;
+  }
 
-let playerBlobs = [new BasicBlob(50, 200)];
-let enemyCubes = [new PinkCubeEnemy(500, 200)];
+  // leftmost edge — the "front" for a left-moving unit
+  get front() { return this.x; }
+
+  takeDamage(dmg) {
+    if (this.state === 'DEAD') return;
+    this.hp -= dmg;
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.state = 'DEAD';
+      money += CUBE_DEF.reward;
+      refreshHUD();
+    }
+  }
+
+  findTarget() {
+    let best = null, bestGap = Infinity;
+    for (const b of blobs) {
+      if (b.state === 'DEAD') continue;
+      const gap = this.front - b.front;    // gap between my left and blob's right
+      if (gap <= CUBE_DEF.range && gap > -b.w) {
+        if (gap < bestGap) { best = b; bestGap = gap; }
+      }
+    }
+    if (!best && this.front - (P_BASE_X + 22) <= CUBE_DEF.range) best = 'base';
+    return best;
+  }
+
+  isBlocked() {
+    for (const c of cubes) {
+      if (c === this || c.state === 'DEAD') continue;
+      if (c.x < this.x && this.front - (c.x + c.size) < 2) return true;
+    }
+    return false;
+  }
+
+  update() {
+    if (this.state === 'DEAD') {
+      this.deadTimer++;
+      this.opacity = Math.max(0, 1 - this.deadTimer / 30);
+      return;
+    }
+
+    const target = this.findTarget();
+
+    if (target) {
+      this.state = 'ATTACK';
+      this.atkTimer++;
+      if (this.atkTimer >= CUBE_DEF.attackRate) {
+        this.atkTimer = 0;
+        if (target === 'base') {
+          playerHp = Math.max(0, playerHp - CUBE_DEF.damage);
+          refreshHUD();
+        } else {
+          target.takeDamage(CUBE_DEF.damage);
+        }
+      }
+    } else {
+      this.state = 'WALK';
+      if (!this.isBlocked()) this.x -= CUBE_DEF.speed;
+    }
+  }
+
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+
+    const { x, y, size: s, hp, maxHp, state } = this;
+
+    if (state === 'DEAD') {
+      // Shattered into four chunks
+      ctx.fillStyle = '#b33';
+      const half = s / 2 - 2;
+      ctx.fillRect(x,          y,          half, half);
+      ctx.fillRect(x + half + 4, y,          half, half);
+      ctx.fillRect(x,          y + half + 4, half, half);
+      ctx.fillRect(x + half + 4, y + half + 4, half, half);
+    } else {
+      const attacking = state === 'ATTACK';
+
+      // Right face (darker)
+      ctx.fillStyle = attacking ? '#922' : '#8a2222';
+      ctx.beginPath();
+      ctx.moveTo(x + s,      y);
+      ctx.lineTo(x + s + 10, y - 10);
+      ctx.lineTo(x + s + 10, y + s - 10);
+      ctx.lineTo(x + s,      y + s);
+      ctx.closePath();
+      ctx.fill();
+
+      // Top face (lighter)
+      ctx.fillStyle = attacking ? '#e77' : '#d05050';
+      ctx.beginPath();
+      ctx.moveTo(x,      y);
+      ctx.lineTo(x + 10, y - 10);
+      ctx.lineTo(x + s + 10, y - 10);
+      ctx.lineTo(x + s, y);
+      ctx.closePath();
+      ctx.fill();
+
+      // Front face
+      ctx.fillStyle = attacking ? '#d44' : '#b33';
+      ctx.fillRect(x, y, s, s);
+
+      // Angry eyes
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(x + 8,      y + 12, 13, 11);
+      ctx.fillRect(x + s - 21, y + 12, 13, 11);
+      ctx.fillStyle = '#111';
+      ctx.fillRect(x + 12,     y + 14,  7,  8);
+      ctx.fillRect(x + s - 17, y + 14,  7,  8);
+
+      // Angry brows
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x + 6,      y + 10);
+      ctx.lineTo(x + 22,     y + 14);
+      ctx.moveTo(x + s - 6,  y + 10);
+      ctx.lineTo(x + s - 22, y + 14);
+      ctx.stroke();
+
+      // Mouth (grimace when attacking)
+      if (attacking) {
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + 10, y + s - 14);
+        ctx.lineTo(x + 18, y + s - 18);
+        ctx.lineTo(x + 26, y + s - 14);
+        ctx.lineTo(x + 34, y + s - 18);
+        ctx.lineTo(x + s - 10, y + s - 14);
+        ctx.stroke();
+      }
+
+      // HP bar
+      ctx.fillStyle = '#222';
+      ctx.fillRect(x, y - 7, s, 4);
+      ctx.fillStyle = '#f55';
+      ctx.fillRect(x, y - 7, s * (hp / maxHp), 4);
+    }
+
+    ctx.restore();
+  }
+}
+
+// =============================================================
+//  Drawing helpers
+// =============================================================
+
+function drawBackground() {
+  // Sky gradient
+  const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  sky.addColorStop(0, '#080818');
+  sky.addColorStop(1, '#12294a');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, GROUND_Y);
+
+  // Ground
+  ctx.fillStyle = '#162a16';
+  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+
+  // Ground highlight stripe
+  ctx.fillStyle = '#1e3a1e';
+  ctx.fillRect(0, GROUND_Y, W, 5);
+}
+
+function drawBase(cx, maxHp, currentHp, isPlayer) {
+  const baseW = 44, baseH = 96;
+  const bx = cx - baseW / 2;
+  const by = GROUND_Y - baseH;
+
+  // Tower body
+  ctx.fillStyle = isPlayer ? '#2a2a55' : '#55202a';
+  ctx.fillRect(bx, by, baseW, baseH);
+
+  // Battlements (3 merlons)
+  ctx.fillStyle = isPlayer ? '#3838 70' : '#6a2a38';
+  // just use the tower colour + a shade
+  ctx.fillStyle = isPlayer ? '#333366' : '#662233';
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(bx + i * 15, by - 14, 10, 14);
+  }
+
+  // Door arch
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(cx - 7, GROUND_Y - 28, 14, 28);
+  ctx.beginPath();
+  ctx.arc(cx, GROUND_Y - 28, 7, Math.PI, 0);
+  ctx.fill();
+
+  // HP bar above tower
+  const barW = 70;
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(cx - barW / 2, by - 22, barW, 8);
+  ctx.fillStyle = isPlayer ? '#5af' : '#f55';
+  ctx.fillRect(cx - barW / 2, by - 22, barW * (currentHp / maxHp), 8);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx - barW / 2, by - 22, barW, 8);
+}
+
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = result === 'WIN' ? '#6f6' : '#f66';
+  ctx.font = 'bold 52px sans-serif';
+  ctx.fillText(result === 'WIN' ? '🎉 Victory!' : '💀 Defeated!', W / 2, H / 2 - 16);
+
+  ctx.fillStyle = '#aaa';
+  ctx.font = '18px sans-serif';
+  ctx.fillText('Press R to retry', W / 2, H / 2 + 22);
+}
+
+// =============================================================
+//  HUD
+// =============================================================
+
+function refreshHUD() {
+  document.getElementById('money').textContent = money;
+  document.getElementById('p-hp').textContent  = playerHp;
+  document.getElementById('e-hp').textContent  = enemyHp;
+  document.getElementById('p-hp-fill').style.width = (playerHp / P_BASE_MAX * 100) + '%';
+  document.getElementById('e-hp-fill').style.width = (enemyHp / E_BASE_MAX * 100) + '%';
+  updateBlobButton();
+}
+
+function updateBlobButton() {
+  const btn = document.getElementById('btn-basic');
+  btn.classList.remove('can-afford', 'cant-afford', 'on-cooldown');
+  if (blobCooldown > 0) {
+    btn.classList.add('on-cooldown');
+  } else if (money >= BASIC_BLOB.cost) {
+    btn.classList.add('can-afford');
+  } else {
+    btn.classList.add('cant-afford');
+  }
+  // Cooldown overlay height
+  const pct = blobCooldown > 0 ? (blobCooldown / BASIC_BLOB.spawnCooldown * 100) : 0;
+  document.getElementById('cd-basic').style.height = pct + '%';
+}
+
+// =============================================================
+//  Spawning
+// =============================================================
+
+function trySpawnBlob() {
+  if (gameOver) return;
+  if (money < BASIC_BLOB.cost) return;
+  if (blobCooldown > 0) return;
+  money -= BASIC_BLOB.cost;
+  blobs.push(new BasicBlob());
+  blobCooldown = BASIC_BLOB.spawnCooldown;
+  refreshHUD();
+}
+
+// =============================================================
+//  Input
+// =============================================================
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.key === '1') { e.preventDefault(); trySpawnBlob(); }
+  if ((e.key === 'r' || e.key === 'R') && gameOver) initGame();
+});
+
+// =============================================================
+//  Main loop
+// =============================================================
 
 function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  requestAnimationFrame(gameLoop);
 
-    for (let i = enemyCubes.length - 1; i >= 0; i--) {
-        enemyCubes[i].update();
-        enemyCubes[i].draw(ctx);
-        if (enemyCubes[i].state === 'DEAD') enemyCubes.splice(i, 1);
-    }
+  // ── Draw ──────────────────────────────────────────────────
+  drawBackground();
+  drawBase(P_BASE_X, P_BASE_MAX, playerHp, true);
+  drawBase(E_BASE_X, E_BASE_MAX, enemyHp,  false);
 
-    for (let i = playerBlobs.length - 1; i >= 0; i--) {
-        let blob = playerBlobs[i];
-        blob.update(enemyCubes);
-        blob.draw(ctx);
+  // Sort all units by x so overlapping looks natural
+  const all = [...blobs, ...cubes];
+  all.sort((a, b) => (a.x + a.w / 2) - (b.x + b.w / 2));
+  all.forEach(u => u.draw());
 
-        if (blob.state === 'DEAD' && blob.opacity <= 0) {
-            playerBlobs.splice(i, 1);
-        }
-    }
+  if (gameOver) { drawGameOver(); return; }
 
-    requestAnimationFrame(gameLoop);
+  // ── Update ────────────────────────────────────────────────
+  frame++;
+
+  // Passive money trickle: +10 every 2.5 s
+  moneyTimer++;
+  if (moneyTimer >= 150) { moneyTimer = 0; money += 10; refreshHUD(); }
+
+  // Blob spawn cooldown
+  if (blobCooldown > 0) { blobCooldown--; updateBlobButton(); }
+
+  // Enemy cube spawning — one cube every ~3 s (180 frames)
+  enemySpawnTimer++;
+  if (enemySpawnTimer >= 180) { enemySpawnTimer = 0; cubes.push(new Cube()); }
+
+  // Update units
+  blobs.forEach(b => b.update());
+  cubes.forEach(c => c.update());
+
+  // Remove fully faded dead units
+  blobs = blobs.filter(b => !(b.state === 'DEAD' && b.opacity <= 0));
+  cubes = cubes.filter(c => !(c.state === 'DEAD' && c.opacity <= 0));
+
+  // Win / lose check
+  if (enemyHp <= 0) { gameOver = true; result = 'WIN';  }
+  if (playerHp <= 0) { gameOver = true; result = 'LOSE'; }
 }
 
-// Ensure you have an HTML canvas element with id="gameCanvas" before calling gameLoop()
+// =============================================================
+//  Boot
+// =============================================================
+initGame();
 gameLoop();
