@@ -7,7 +7,6 @@ const blobSprites = {
     knockback: new Image(), death: new Image()
 };
 
-// Image Paths
 blobSprites.idle.src      = 'img/blob/basic-blob-idle.png';
 blobSprites.walk1.src     = 'img/blob/basic-blob-walk1.png';
 blobSprites.walk2.src     = 'img/blob/basic-blob-walk2.png';
@@ -18,14 +17,12 @@ blobSprites.knockback.src = 'img/blob/basic-blob-knockback.png';
 blobSprites.death.src     = 'img/blob/basic-blob-dead.png';
 
 // ==========================================
-// 2. HERO BLOB CLASS (Perfect Scale)
+// 2. HERO BLOB CLASS
 // ==========================================
 class BasicBlob {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        
-        // BIGGER SIZE: Fits the actual scale of your canvas and enemies perfectly
         this.width = 160;   
         this.height = 90;   
         
@@ -33,7 +30,7 @@ class BasicBlob {
         this.maxHp = 100;
         this.damage = 25;
         this.speed = 1.5;
-        this.attackRange = 15; // Requires him to stand directly in front of the target
+        this.attackRange = 15; 
         
         this.state = 'WALKING'; 
         this.stateTimer = 0;
@@ -47,8 +44,6 @@ class BasicBlob {
 
     runLogic(enemies, enemyBase) {
         this.animationTimer++;
-
-        // Calculate the front visual edge of our blob (ignoring the invisible image padding)
         let visualFrontEdge = this.x + (this.width * 0.65);
 
         switch (this.state) {
@@ -60,13 +55,11 @@ class BasicBlob {
                     this.animationTimer = 0;
                 }
 
-                // 1. Check for nearby enemy units
                 let closestEnemy = enemies.filter(e => e.x > this.x && e.state !== 'DEAD')[0] || null;
                 if (closestEnemy && (closestEnemy.x - visualFrontEdge) <= this.attackRange) {
                     this.state = 'ATTACKING';
                     this.stateTimer = 30;
                 } 
-                // 2. Check for enemy base
                 else if (enemyBase && (enemyBase.x - visualFrontEdge) <= this.attackRange) {
                     this.state = 'ATTACKING';
                     this.stateTimer = 30;
@@ -76,14 +69,12 @@ class BasicBlob {
             case 'ATTACKING':
                 this.stateTimer--;
                 
-                // Attack lunging momentum
                 if (this.stateTimer > 15) {
                     this.x += 1.5;
                 } else if (this.stateTimer <= 15 && this.stateTimer > 0) {
                     this.x -= 1.5;
                 }
 
-                // Hit frame right at the middle of the lunge animation
                 if (this.stateTimer === 15) {
                     let target = enemies.filter(e => e.x > this.x && e.state !== 'DEAD')[0] || null;
                     if (target) {
@@ -148,18 +139,40 @@ class PinkCubeEnemy {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.width = 80;  // Scaled up slightly to fit the world
+        this.width = 80;  
         this.height = 80;
         this.hp = 100;
         this.state = 'ALIVE';
+        
+        this.attackTimer = 0;
+        this.attackCooldown = 60; // Attacks once every 60 frames
     }
-    runLogic() {
-        if (this.state !== 'DEAD') this.x -= 0.5; 
+    
+    runLogic(allies) {
+        if (this.state === 'DEAD') return;
+        
+        // Find if there is a blob right in front of the cube to fight
+        let targetBlob = allies.filter(b => b.x < this.x && b.state !== 'DEAD').sort((a, b) => b.x - a.x)[0] || null;
+        
+        if (targetBlob && (this.x - (targetBlob.x + targetBlob.width * 0.65)) <= 20) {
+            // Stop and strike
+            this.attackTimer++;
+            if (this.attackTimer >= this.attackCooldown) {
+                targetBlob.takeDamage(20); // Cube deals 20 damage
+                this.attackTimer = 0;
+            }
+        } else {
+            // Keep marching left if clear
+            this.x -= 0.8; 
+            this.attackTimer = 0;
+        }
     }
+    
     takeDamage(amount) {
         this.hp -= amount;
         if (this.hp <= 0) this.state = 'DEAD';
     }
+    
     draw(ctx) {
         if (this.state === 'DEAD') return;
         ctx.fillStyle = '#ffb6c1';
@@ -176,7 +189,7 @@ class Base {
         this.y = y;
         this.width = 100;
         this.height = 150;
-        this.hp = 500;
+        this.hp = 1000; // Increased base health for longer rounds
         this.color = color;
     }
     takeDamage(amount) {
@@ -194,16 +207,28 @@ class Base {
 }
 
 // ==========================================
-// 5. THE MAIN GAME SYSTEM LOOP
+// 5. THE MAIN GAME SYSTEM LOOP & SPAWNING
 // ==========================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Perfectly levels the feet of all assets onto the ground line
-let playerBlobs = [new BasicBlob(120, 210)];
-let enemyCubes = [new PinkCubeEnemy(550, 220)];
+let playerBlobs = [];
+let enemyCubes = [];
 let playerBase = new Base(0, 150, '#34495e'); 
 let enemyBase  = new Base(700, 150, '#c0392b'); 
+
+// Spawning Variables
+let enemySpawnTimer = 0;
+const enemySpawnInterval = 180; // Spawns an enemy cube every 3 seconds (180 frames)
+
+// KEYBOARD SPAWNING MECHANIC
+window.addEventListener('keydown', (event) => {
+    if (event.code === 'Space') {
+        event.preventDefault(); // Stop page from scrolling down
+        // Spawn a new blob directly right in front of your base doors
+        playerBlobs.push(new BasicBlob(80, 210));
+    }
+});
 
 function mainGameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -217,9 +242,17 @@ function mainGameLoop() {
     playerBase.draw(ctx);
     enemyBase.draw(ctx);
 
+    // Handle Automatic Enemy Spawning
+    enemySpawnTimer++;
+    if (enemySpawnTimer >= enemySpawnInterval) {
+        // Spawn an enemy right in front of the red base doors
+        enemyCubes.push(new PinkCubeEnemy(620, 220));
+        enemySpawnTimer = 0;
+    }
+
     // Run Enemy Units
     for (let i = enemyCubes.length - 1; i >= 0; i--) {
-        enemyCubes[i].runLogic();
+        enemyCubes[i].runLogic(playerBlobs);
         enemyCubes[i].draw(ctx);
         if (enemyCubes[i].state === 'DEAD') enemyCubes.splice(i, 1);
     }
@@ -237,5 +270,9 @@ function mainGameLoop() {
 
     requestAnimationFrame(mainGameLoop);
 }
+
+// Initial spawns to start the action immediately
+playerBlobs.push(new BasicBlob(80, 210));
+enemyCubes.push(new PinkCubeEnemy(620, 220));
 
 mainGameLoop();
