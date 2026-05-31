@@ -10,8 +10,8 @@ const H = canvas.height;  // 380
 
 // ── Layout ────────────────────────────────────────────────────
 const GROUND_Y   = 290;   // y where units stand
-const P_BASE_X   = 40;    // player base centre x
-const E_BASE_X   = 760;   // enemy  base centre x
+const P_BASE_X   = 760;   // player base centre x
+const E_BASE_X   = 40;    // enemy  base centre x
 const P_BASE_MAX = 5000;
 const E_BASE_MAX = 1500;
 
@@ -77,12 +77,12 @@ function initGame() {
 }
 
 // =============================================================
-//  BasicBlob  (player unit — moves RIGHT)
+//  BasicBlob  (player unit — moves LEFT)
 // =============================================================
 class BasicBlob {
   constructor() {
     const d = BASIC_BLOB;
-    this.x  = P_BASE_X + 28;
+    this.x  = P_BASE_X - 28 - d.w;
     this.y  = GROUND_Y - d.h;
     this.w  = d.w;
     this.h  = d.h;
@@ -97,15 +97,15 @@ class BasicBlob {
     this.opacity    = 1;
   }
 
-  // rightmost edge — the "front" for a right-moving unit
-  get front() { return this.x + this.w; }
+  // leftmost edge — the "front" for a left-moving unit
+  get front() { return this.x; }
 
   takeDamage(dmg) {
     if (this.state === 'DEAD') return;
     this.hp -= dmg;
     if (this.hp <= 0) { this.hp = 0; this.state = 'DEAD'; return; }
     if (dmg >= this.maxHp * 0.25) {
-      this.state = 'KNOCKBACK';
+      this.state      = 'KNOCKBACK';
       this.knockTimer = 18;
     }
   }
@@ -115,12 +115,12 @@ class BasicBlob {
     let best = null, bestGap = Infinity;
     for (const c of cubes) {
       if (c.state === 'DEAD') continue;
-      const gap = c.x - this.front;          // gap between my right and cube's left
-      if (gap <= BASIC_BLOB.range && gap > -c.size) {
+      const gap = this.front - (c.x + c.w);  // gap between my left and cube's right
+      if (gap <= BASIC_BLOB.range && gap > -c.w) {
         if (gap < bestGap) { best = c; bestGap = gap; }
       }
     }
-    if (!best && (E_BASE_X - 22) - this.front <= BASIC_BLOB.range) best = 'base';
+    if (!best && this.front - (E_BASE_X + 22) <= BASIC_BLOB.range) best = 'base';
     return best;
   }
 
@@ -134,7 +134,7 @@ class BasicBlob {
 
     if (this.state === 'KNOCKBACK') {
       this.knockTimer--;
-      this.x -= 2;
+      this.x += 2;
       if (this.knockTimer <= 0) this.state = 'WALK';
       return;
     }
@@ -155,7 +155,7 @@ class BasicBlob {
       }
     } else {
       this.state = 'WALK';
-      this.x += BASIC_BLOB.speed;
+      this.x -= BASIC_BLOB.speed;
       this.animTimer++;
       if (this.animTimer >= 8) {
         this.animTimer = 0;
@@ -167,6 +167,9 @@ class BasicBlob {
   draw() {
     ctx.save();
     ctx.globalAlpha = this.opacity;
+    // Flip sprite horizontally so blob faces left
+    ctx.translate(this.x + this.w, 0);
+    ctx.scale(-1, 1);
 
     const WALK = [spr.walk1, spr.walk2, spr.walk3, spr.walk4];
     let img;
@@ -176,24 +179,21 @@ class BasicBlob {
     else                                 img = WALK[this.animFrame];
 
     if (img && img.complete && img.naturalWidth > 0) {
-      ctx.drawImage(img, this.x, this.y, this.w, this.h);
+      ctx.drawImage(img, 0, this.y, this.w, this.h);
     } else {
-      // Fallback circle while sprites load
       ctx.fillStyle = '#6af';
       ctx.beginPath();
-      ctx.ellipse(this.x + this.w / 2, this.y + this.h / 2,
+      ctx.ellipse(this.w / 2, this.y + this.h / 2,
                   this.w / 2, this.h / 2, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-
-
 
     ctx.restore();
   }
 }
 
 // =============================================================
-//  Cube  (enemy unit — moves LEFT)
+//  Cube  (enemy unit — moves RIGHT)
 // =============================================================
 class Cube {
   constructor() {
@@ -201,7 +201,7 @@ class Cube {
     this.size   = s;
     this.w      = s;
     this.h      = s;
-    this.x      = E_BASE_X - 28 - s;  // spawn just left of enemy base
+    this.x      = E_BASE_X + 28;  // spawn just right of enemy base
     this.y      = GROUND_Y - s;
     this.hp     = CUBE_DEF.hp;
     this.maxHp  = CUBE_DEF.hp;
@@ -211,8 +211,8 @@ class Cube {
     this.opacity   = 1;
   }
 
-  // leftmost edge — the "front" for a left-moving unit
-  get front() { return this.x; }
+  // rightmost edge — the "front" for a right-moving unit
+  get front() { return this.x + this.w; }
 
   takeDamage(dmg) {
     if (this.state === 'DEAD') return;
@@ -229,12 +229,12 @@ class Cube {
     let best = null, bestGap = Infinity;
     for (const b of blobs) {
       if (b.state === 'DEAD') continue;
-      const gap = this.front - b.front;    // gap between my left and blob's right
+      const gap = b.front - this.front;    // gap between my right and blob's left
       if (gap <= CUBE_DEF.range && gap > -b.w) {
         if (gap < bestGap) { best = b; bestGap = gap; }
       }
     }
-    if (!best && this.front - (P_BASE_X + 22) <= CUBE_DEF.range) best = 'base';
+    if (!best && (P_BASE_X - 22) - this.front <= CUBE_DEF.range) best = 'base';
     return best;
   }
 
@@ -262,7 +262,7 @@ class Cube {
       }
     } else {
       this.state = 'WALK';
-      this.x -= CUBE_DEF.speed;
+      this.x += CUBE_DEF.speed;
     }
   }
 
@@ -474,7 +474,7 @@ function gameLoop() {
 
   // Sort all units by x so overlapping looks natural
   const all = [...blobs, ...cubes];
-  all.sort((a, b) => (a.x + a.w / 2) - (b.x + b.w / 2));
+  all.sort((a, b) => (b.x + b.w / 2) - (a.x + a.w / 2));
   all.forEach(u => u.draw());
 
   if (gameOver) { drawGameOver(); return; }
