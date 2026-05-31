@@ -42,7 +42,7 @@
       min-width: 80px;
     }
 
-    /* HP bars */
+    /* HP display */
     .hp-section {
       display: flex;
       flex-direction: column;
@@ -56,17 +56,9 @@
       font-size: 12px;
     }
     .hp-label { width: 78px; color: #aaa; }
-    .hp-track {
-      flex: 1;
-      height: 10px;
-      background: #2a2a2a;
-      border-radius: 5px;
-      overflow: hidden;
-    }
-    .hp-fill { height: 100%; border-radius: 5px; transition: width 0.1s; }
-    #p-hp-fill { background: #5af; width: 100%; }
-    #e-hp-fill { background: #f55; width: 100%; }
-    .hp-val { width: 40px; text-align: right; color: #888; font-size: 11px; }
+    .hp-val { font-family: monospace; font-size: 13px; font-weight: bold; }
+    #p-hp { color: #5af; }
+    #e-hp { color: #f55; }
 
     /* Spawn button */
     .blob-btn {
@@ -117,13 +109,11 @@
   <div class="hp-section">
     <div class="hp-row">
       <span class="hp-label">Your Base</span>
-      <div class="hp-track"><div class="hp-fill" id="p-hp-fill"></div></div>
-      <span class="hp-val" id="p-hp">5000</span>
+      <span class="hp-val" id="p-hp">5000/5000</span>
     </div>
     <div class="hp-row">
       <span class="hp-label">Enemy Base</span>
-      <div class="hp-track"><div class="hp-fill" id="e-hp-fill"></div></div>
-      <span class="hp-val" id="e-hp">1500</span>
+      <span class="hp-val" id="e-hp">1500/1500</span>
     </div>
   </div>
 

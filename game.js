@@ -194,14 +194,7 @@ class BasicBlob {
       ctx.fill();
     }
 
-    // HP bar
-    if (this.state !== 'DEAD') {
-      const bx = this.x, by = this.y - 7;
-      ctx.fillStyle = '#222';
-      ctx.fillRect(bx, by, this.w, 4);
-      ctx.fillStyle = '#5af';
-      ctx.fillRect(bx, by, this.w * (this.hp / this.maxHp), 4);
-    }
+
 
     ctx.restore();
   }
@@ -361,11 +354,6 @@ class Cube {
         ctx.stroke();
       }
 
-      // HP bar
-      ctx.fillStyle = '#222';
-      ctx.fillRect(x, y - 7, s, 4);
-      ctx.fillStyle = '#f55';
-      ctx.fillRect(x, y - 7, s * (hp / maxHp), 4);
     }
 
     ctx.restore();
@@ -417,15 +405,11 @@ function drawBase(cx, maxHp, currentHp, isPlayer) {
   ctx.arc(cx, GROUND_Y - 28, 7, Math.PI, 0);
   ctx.fill();
 
-  // HP bar above tower
-  const barW = 70;
-  ctx.fillStyle = '#1a1a1a';
-  ctx.fillRect(cx - barW / 2, by - 22, barW, 8);
+  // HP text above tower
   ctx.fillStyle = isPlayer ? '#5af' : '#f55';
-  ctx.fillRect(cx - barW / 2, by - 22, barW * (currentHp / maxHp), 8);
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(cx - barW / 2, by - 22, barW, 8);
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${currentHp}/${maxHp}`, cx, by - 6);
 }
 
 function drawGameOver() {
@@ -448,10 +432,8 @@ function drawGameOver() {
 
 function refreshHUD() {
   document.getElementById('money').textContent = money;
-  document.getElementById('p-hp').textContent  = playerHp;
-  document.getElementById('e-hp').textContent  = enemyHp;
-  document.getElementById('p-hp-fill').style.width = (playerHp / P_BASE_MAX * 100) + '%';
-  document.getElementById('e-hp-fill').style.width = (enemyHp / E_BASE_MAX * 100) + '%';
+  document.getElementById('p-hp').textContent = `${playerHp}/${P_BASE_MAX}`;
+  document.getElementById('e-hp').textContent = `${enemyHp}/${E_BASE_MAX}`;
   updateBlobButton();
 }
 
