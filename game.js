@@ -23,7 +23,7 @@ const BASIC_BLOB = {
   range: 72,        // px from front edge to target front edge
   cost: 50,
   spawnCooldown: 60,
-  w: 64, h: 64,
+  w: 90, h: 90,
 };
 
 // ── Cube stats ────────────────────────────────────────────────
