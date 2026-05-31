@@ -17,7 +17,7 @@ blobSprites.knockback.src = 'img/blob/basic-blob-knockback.png';
 blobSprites.death.src     = 'img/blob/basic-blob-dead.png';
 
 // ==========================================
-// 2. HERO BLOB CLASS
+// 2. HERO BLOB CLASS (Spawns Right, Walks Left)
 // ==========================================
 class BasicBlob {
     constructor(x, y) {
@@ -44,23 +44,28 @@ class BasicBlob {
 
     runLogic(enemies, enemyBase) {
         this.animationTimer++;
-        let visualFrontEdge = this.x + (this.width * 0.65);
+        
+        // Since we are moving LEFT, the visual front edge is the left side of the sprite
+        let visualFrontEdge = this.x + (this.width * 0.35);
 
         switch (this.state) {
             case 'WALKING':
-                this.x += this.speed;
+                // Move Left toward enemy base
+                this.x -= this.speed;
 
                 if (this.animationTimer >= this.animationSpeed) {
                     this.currentFrameIndex = (this.currentFrameIndex + 1) % this.walkFrames.length;
                     this.animationTimer = 0;
                 }
 
-                let closestEnemy = enemies.filter(e => e.x > this.x && e.state !== 'DEAD')[0] || null;
-                if (closestEnemy && (closestEnemy.x - visualFrontEdge) <= this.attackRange) {
+                // 1. Check for nearby enemy units (which are to our left)
+                let closestEnemy = enemies.filter(e => e.x < this.x && e.state !== 'DEAD').sort((a, b) => b.x - a.x)[0] || null;
+                if (closestEnemy && (visualFrontEdge - (closestEnemy.x + closestEnemy.width)) <= this.attackRange) {
                     this.state = 'ATTACKING';
                     this.stateTimer = 30;
                 } 
-                else if (enemyBase && (enemyBase.x - visualFrontEdge) <= this.attackRange) {
+                // 2. Check for enemy base on the left
+                else if (enemyBase && (visualFrontEdge - (enemyBase.x + enemyBase.width)) <= this.attackRange) {
                     this.state = 'ATTACKING';
                     this.stateTimer = 30;
                 }
@@ -69,17 +74,19 @@ class BasicBlob {
             case 'ATTACKING':
                 this.stateTimer--;
                 
+                // Lunge momentum left, then back right
                 if (this.stateTimer > 15) {
-                    this.x += 1.5;
-                } else if (this.stateTimer <= 15 && this.stateTimer > 0) {
                     this.x -= 1.5;
+                } else if (this.stateTimer <= 15 && this.stateTimer > 0) {
+                    this.x += 1.5;
                 }
 
+                // Deliver precise hit midway through the strike
                 if (this.stateTimer === 15) {
-                    let target = enemies.filter(e => e.x > this.x && e.state !== 'DEAD')[0] || null;
+                    let target = enemies.filter(e => e.x < this.x && e.state !== 'DEAD').sort((a, b) => b.x - a.x)[0] || null;
                     if (target) {
                         target.takeDamage(this.damage);
-                    } else if (enemyBase && (enemyBase.x - visualFrontEdge) <= this.attackRange + 40) {
+                    } else if (enemyBase && (visualFrontEdge - (enemyBase.x + enemyBase.width)) <= this.attackRange + 40) {
                         enemyBase.takeDamage(this.damage);
                     }
                 }
@@ -89,7 +96,7 @@ class BasicBlob {
 
             case 'KNOCKBACK':
                 this.stateTimer--;
-                this.x -= 3;
+                this.x += 3; // Fly backwards to the right
                 if (this.stateTimer <= 0) this.state = 'WALKING';
                 break;
 
@@ -122,8 +129,12 @@ class BasicBlob {
 
         ctx.save();
         ctx.globalAlpha = Math.max(0, this.opacity);
+        
         if (sprite && sprite.complete && sprite.naturalWidth !== 0) {
-            ctx.drawImage(sprite, this.x, this.y, this.width, this.height);
+            // Flip the image horizontally so the blob faces left towards the enemy!
+            ctx.translate(this.x + this.width, this.y);
+            ctx.scale(-1, 1);
+            ctx.drawImage(sprite, 0, 0, this.width, this.height);
         } else {
             ctx.fillStyle = '#2ecc71';
             ctx.fillRect(this.x, this.y, 64, 64);
@@ -133,7 +144,7 @@ class BasicBlob {
 }
 
 // ==========================================
-// 3. ENEMY CUBE CLASS
+// 3. ENEMY CUBE CLASS (Spawns Left, Walks Right)
 // ==========================================
 class PinkCubeEnemy {
     constructor(x, y) {
@@ -143,36 +154,14 @@ class PinkCubeEnemy {
         this.height = 80;
         this.hp = 100;
         this.state = 'ALIVE';
-        
-        this.attackTimer = 0;
-        this.attackCooldown = 60; // Attacks once every 60 frames
     }
-    
-    runLogic(allies) {
-        if (this.state === 'DEAD') return;
-        
-        // Find if there is a blob right in front of the cube to fight
-        let targetBlob = allies.filter(b => b.x < this.x && b.state !== 'DEAD').sort((a, b) => b.x - a.x)[0] || null;
-        
-        if (targetBlob && (this.x - (targetBlob.x + targetBlob.width * 0.65)) <= 20) {
-            // Stop and strike
-            this.attackTimer++;
-            if (this.attackTimer >= this.attackCooldown) {
-                targetBlob.takeDamage(20); // Cube deals 20 damage
-                this.attackTimer = 0;
-            }
-        } else {
-            // Keep marching left if clear
-            this.x -= 0.8; 
-            this.attackTimer = 0;
-        }
+    runLogic() {
+        if (this.state !== 'DEAD') this.x += 0.5; // Walk right
     }
-    
     takeDamage(amount) {
         this.hp -= amount;
         if (this.hp <= 0) this.state = 'DEAD';
     }
-    
     draw(ctx) {
         if (this.state === 'DEAD') return;
         ctx.fillStyle = '#ffb6c1';
@@ -189,7 +178,7 @@ class Base {
         this.y = y;
         this.width = 100;
         this.height = 150;
-        this.hp = 1000; // Increased base health for longer rounds
+        this.hp = 500;
         this.color = color;
     }
     takeDamage(amount) {
@@ -207,26 +196,27 @@ class Base {
 }
 
 // ==========================================
-// 5. THE MAIN GAME SYSTEM LOOP & SPAWNING
+// 5. MAIN SYSTEM LOOP
 // ==========================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 let playerBlobs = [];
 let enemyCubes = [];
-let playerBase = new Base(0, 150, '#34495e'); 
-let enemyBase  = new Base(700, 150, '#c0392b'); 
 
-// Spawning Variables
+// REVERTED POSITIONS: Enemy base on Left (0), Player base on Right (700)
+let enemyBase  = new Base(0, 150, '#c0392b');  
+let playerBase = new Base(700, 150, '#34495e'); 
+
 let enemySpawnTimer = 0;
-const enemySpawnInterval = 180; // Spawns an enemy cube every 3 seconds (180 frames)
+const enemySpawnInterval = 180; 
 
 // KEYBOARD SPAWNING MECHANIC
 window.addEventListener('keydown', (event) => {
     if (event.code === 'Space') {
-        event.preventDefault(); // Stop page from scrolling down
-        // Spawn a new blob directly right in front of your base doors
-        playerBlobs.push(new BasicBlob(80, 210));
+        event.preventDefault(); 
+        // Spawns on the right side, right next to your home base doors
+        playerBlobs.push(new BasicBlob(560, 210)); 
     }
 });
 
@@ -242,17 +232,16 @@ function mainGameLoop() {
     playerBase.draw(ctx);
     enemyBase.draw(ctx);
 
-    // Handle Automatic Enemy Spawning
+    // Handle Automatic Enemy Spawning from the left base
     enemySpawnTimer++;
     if (enemySpawnTimer >= enemySpawnInterval) {
-        // Spawn an enemy right in front of the red base doors
-        enemyCubes.push(new PinkCubeEnemy(620, 220));
+        enemyCubes.push(new PinkCubeEnemy(100, 220));
         enemySpawnTimer = 0;
     }
 
     // Run Enemy Units
     for (let i = enemyCubes.length - 1; i >= 0; i--) {
-        enemyCubes[i].runLogic(playerBlobs);
+        enemyCubes[i].runLogic();
         enemyCubes[i].draw(ctx);
         if (enemyCubes[i].state === 'DEAD') enemyCubes.splice(i, 1);
     }
@@ -271,8 +260,8 @@ function mainGameLoop() {
     requestAnimationFrame(mainGameLoop);
 }
 
-// Initial spawns to start the action immediately
-playerBlobs.push(new BasicBlob(80, 210));
-enemyCubes.push(new PinkCubeEnemy(620, 220));
+// Initial spawns to start the round
+playerBlobs.push(new BasicBlob(560, 210));
+enemyCubes.push(new PinkCubeEnemy(100, 220));
 
 mainGameLoop();
