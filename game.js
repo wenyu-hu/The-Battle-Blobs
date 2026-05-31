@@ -124,14 +124,6 @@ class BasicBlob {
     return best;
   }
 
-  // True if a friendly blob is directly in front, blocking movement.
-  isBlocked() {
-    for (const b of blobs) {
-      if (b === this || b.state === 'DEAD') continue;
-      if (b.x > this.x && b.x - this.front < 2) return true;
-    }
-    return false;
-  }
 
   update() {
     if (this.state === 'DEAD') {
@@ -163,7 +155,7 @@ class BasicBlob {
       }
     } else {
       this.state = 'WALK';
-      if (!this.isBlocked()) this.x += BASIC_BLOB.speed;
+      this.x += BASIC_BLOB.speed;
       this.animTimer++;
       if (this.animTimer >= 8) {
         this.animTimer = 0;
@@ -246,13 +238,6 @@ class Cube {
     return best;
   }
 
-  isBlocked() {
-    for (const c of cubes) {
-      if (c === this || c.state === 'DEAD') continue;
-      if (c.x < this.x && this.front - (c.x + c.size) < 2) return true;
-    }
-    return false;
-  }
 
   update() {
     if (this.state === 'DEAD') {
@@ -277,7 +262,7 @@ class Cube {
       }
     } else {
       this.state = 'WALK';
-      if (!this.isBlocked()) this.x -= CUBE_DEF.speed;
+      this.x -= CUBE_DEF.speed;
     }
   }
 
