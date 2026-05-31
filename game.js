@@ -7,7 +7,7 @@ const blobSprites = {
     knockback: new Image(), death: new Image()
 };
 
-// If your images are in the exact same folder as game.js, change 'img/blob/' to ''
+// Image Paths
 blobSprites.idle.src      = 'img/blob/basic-blob-idle.png';
 blobSprites.walk1.src     = 'img/blob/basic-blob-walk1.png';
 blobSprites.walk2.src     = 'img/blob/basic-blob-walk2.png';
@@ -18,20 +18,22 @@ blobSprites.knockback.src = 'img/blob/basic-blob-knockback.png';
 blobSprites.death.src     = 'img/blob/basic-blob-dead.png';
 
 // ==========================================
-// 2. HERO BLOB CLASS
+// 2. HERO BLOB CLASS (Perfect Scale)
 // ==========================================
 class BasicBlob {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.width = 128; // Prevents the thin/squished look   
-        this.height = 64;   
+        
+        // BIGGER SIZE: Fits the actual scale of your canvas and enemies perfectly
+        this.width = 160;   
+        this.height = 90;   
         
         this.hp = 100;
         this.maxHp = 100;
         this.damage = 25;
-        this.speed = 2;
-        this.attackRange = 30; 
+        this.speed = 1.5;
+        this.attackRange = 15; // Requires him to stand directly in front of the target
         
         this.state = 'WALKING'; 
         this.stateTimer = 0;
@@ -46,6 +48,9 @@ class BasicBlob {
     runLogic(enemies, enemyBase) {
         this.animationTimer++;
 
+        // Calculate the front visual edge of our blob (ignoring the invisible image padding)
+        let visualFrontEdge = this.x + (this.width * 0.65);
+
         switch (this.state) {
             case 'WALKING':
                 this.x += this.speed;
@@ -55,14 +60,14 @@ class BasicBlob {
                     this.animationTimer = 0;
                 }
 
-                // Check for enemies first
+                // 1. Check for nearby enemy units
                 let closestEnemy = enemies.filter(e => e.x > this.x && e.state !== 'DEAD')[0] || null;
-                if (closestEnemy && (closestEnemy.x - (this.x + this.width)) <= this.attackRange) {
+                if (closestEnemy && (closestEnemy.x - visualFrontEdge) <= this.attackRange) {
                     this.state = 'ATTACKING';
                     this.stateTimer = 30;
                 } 
-                // Check for enemy base second
-                else if (enemyBase && (enemyBase.x - (this.x + this.width)) <= this.attackRange) {
+                // 2. Check for enemy base
+                else if (enemyBase && (enemyBase.x - visualFrontEdge) <= this.attackRange) {
                     this.state = 'ATTACKING';
                     this.stateTimer = 30;
                 }
@@ -71,13 +76,19 @@ class BasicBlob {
             case 'ATTACKING':
                 this.stateTimer--;
                 
+                // Attack lunging momentum
+                if (this.stateTimer > 15) {
+                    this.x += 1.5;
+                } else if (this.stateTimer <= 15 && this.stateTimer > 0) {
+                    this.x -= 1.5;
+                }
+
+                // Hit frame right at the middle of the lunge animation
                 if (this.stateTimer === 15) {
-                    this.x += 25; // Lunge forward
-                    
                     let target = enemies.filter(e => e.x > this.x && e.state !== 'DEAD')[0] || null;
                     if (target) {
                         target.takeDamage(this.damage);
-                    } else if (enemyBase && (enemyBase.x - (this.x + this.width)) <= this.attackRange + 40) {
+                    } else if (enemyBase && (enemyBase.x - visualFrontEdge) <= this.attackRange + 40) {
                         enemyBase.takeDamage(this.damage);
                     }
                 }
@@ -137,8 +148,8 @@ class PinkCubeEnemy {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.width = 64;
-        this.height = 64;
+        this.width = 80;  // Scaled up slightly to fit the world
+        this.height = 80;
         this.hp = 100;
         this.state = 'ALIVE';
     }
@@ -163,8 +174,8 @@ class Base {
     constructor(x, y, color) {
         this.x = x;
         this.y = y;
-        this.width = 80;
-        this.height = 120;
+        this.width = 100;
+        this.height = 150;
         this.hp = 500;
         this.color = color;
     }
@@ -176,10 +187,9 @@ class Base {
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.width, this.height);
         
-        // Health bar display
         ctx.fillStyle = 'white';
-        ctx.font = '14px Arial';
-        ctx.fillText(`HP: ${this.hp}`, this.x + 10, this.y - 10);
+        ctx.font = 'bold 14px Arial';
+        ctx.fillText(`HP: ${this.hp}`, this.x + 15, this.y - 15);
     }
 }
 
@@ -189,16 +199,17 @@ class Base {
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-let playerBlobs = [new BasicBlob(100, 236)];
-let enemyCubes = [new PinkCubeEnemy(600, 236)];
-let playerBase = new Base(20, 180, '#34495e'); // Blue-grey home base
-let enemyBase  = new Base(700, 180, '#c0392b'); // Red enemy base
+// Perfectly levels the feet of all assets onto the ground line
+let playerBlobs = [new BasicBlob(120, 210)];
+let enemyCubes = [new PinkCubeEnemy(550, 220)];
+let playerBase = new Base(0, 150, '#34495e'); 
+let enemyBase  = new Base(700, 150, '#c0392b'); 
 
 function mainGameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Ground Line
-    ctx.strokeStyle = '#444';
+    // Ground Line
+    ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, 300); ctx.lineTo(canvas.width, 300); ctx.stroke();
 
@@ -206,14 +217,14 @@ function mainGameLoop() {
     playerBase.draw(ctx);
     enemyBase.draw(ctx);
 
-    // Run Enemy Logic
+    // Run Enemy Units
     for (let i = enemyCubes.length - 1; i >= 0; i--) {
         enemyCubes[i].runLogic();
         enemyCubes[i].draw(ctx);
         if (enemyCubes[i].state === 'DEAD') enemyCubes.splice(i, 1);
     }
 
-    // Run Player Blob Logic (Wired perfectly to enemies and bases)
+    // Run Player Blobs
     for (let i = playerBlobs.length - 1; i >= 0; i--) {
         let blob = playerBlobs[i];
         blob.runLogic(enemyCubes, enemyBase); 
@@ -227,5 +238,4 @@ function mainGameLoop() {
     requestAnimationFrame(mainGameLoop);
 }
 
-// Start everything up automatically
 mainGameLoop();
