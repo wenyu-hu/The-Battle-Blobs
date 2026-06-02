@@ -96,6 +96,20 @@
       pointer-events: none;
     }
 
+    /* Music mute toggle */
+    #music-toggle {
+      width: 40px;
+      height: 40px;
+      background: #1a1a30;
+      border: 2px solid #444;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      user-select: none;
+    }
+    #music-toggle:hover { border-color: #666; }
+
     .hint { font-size: 11px; color: #444; margin-left: auto; line-height: 1.6; }
   </style>
 </head>
@@ -124,9 +138,12 @@
     <div class="cd-overlay" id="cd-basic"></div>
   </div>
 
+  <button id="music-toggle" onclick="this.textContent = Music.toggleMute() ? '🔇' : '🔊'" title="Mute / unmute music">🔊</button>
+
   <div class="hint">Destroy the enemy base!<br>Press R to retry</div>
 </div>
 
+<script src="music.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
